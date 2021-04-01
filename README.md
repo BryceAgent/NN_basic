@@ -12,4 +12,4 @@ I also wrote in a couple lines to save the NN structure I used on a given traini
 
 The best accuracy I was able to achieve was 86%. From what I have learned I believe that adapting the learning rate during training, such as by using the Adam optimizer or something like it, would allow the program to better hone in on "narrow" but "deep" values of the gradient descent space. Overall, for it being the first neural network I've written by myself with no help or guidance apart from the written tutorial linked above, I'm satisfied by the performance I achieved.
 
-The program as written can be run provided the appropriate dataset is used. The values for 'net', 'epochs', and 'learning_rate' can be changed to find different results. From my tinkering with the model, three hidden layers seems to achieve the best results.
+The program as written can be run provided the appropriate dataset is used. The values for 'net', 'epochs', and 'learning_rate' can be changed to find different results. From my tinkering with the model, two hidden layers seems to achieve the best results.
