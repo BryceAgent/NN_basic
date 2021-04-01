@@ -1,0 +1,181 @@
+import pandas as pd
+import numpy as np
+
+def load_data():
+    test_data = pd.read_csv(r'C:\Users\Bryce\Desktop\projects/mnist_data/mnist_test.csv')
+    training_data = pd.read_csv(r'C:\Users\Bryce\Desktop\projects/mnist_data/mnist_train.csv')
+    test_data = pd.DataFrame(test_data)
+    training_data = pd.DataFrame(training_data)
+    validation_data = training_data[50000:60000].reset_index(drop=True)
+    training_data = training_data.drop(training_data.index[50000:60000])
+
+    return (training_data, validation_data, test_data)
+
+
+def sigmoid(z):
+    return 1.0/(1.0+np.exp(-z))
+
+
+def sigmoid_prime(z):
+    # derivative of sigmoid function
+    return sigmoid(z)*(1-sigmoid(z))
+
+
+def network(sizes):
+    # create network and initialize with random values
+    num_layers = len(sizes)
+    # each bias value applies to a specific node in the network starting with the second layer
+    # first layer has no bias, "naive activation"
+    biases = [np.random.randn(y,1) for y in sizes[1:]]
+    # each weight value applies between each connected node
+    # each node in layer 1 connects to each node in layer 2, and so on
+    weights = [np.random.randn(y,x) for x,y in zip(sizes[:-1], sizes[1:])]
+    return num_layers, biases, weights
+
+
+def SGD(training_data, net, num_layers, biases, weights, epochs, mini_batch_size, learning_rate, test_data):
+    n_test = len(test_data)
+    n = len(training_data)
+
+    bw_stack = []
+    acc_stack = []
+
+    for j in range(epochs):
+        # select 20 random rows from training_data
+        # mini_batches = 1000 * [training_data.sample(n=20)]
+
+        training_data = training_data.sample(frac=1)
+
+        mini_batches = [
+            training_data[k:k + mini_batch_size]
+            for k in range(0, n, mini_batch_size)]
+
+        for mini_batch in mini_batches:
+            biases, weights = update_mini_batch(mini_batch, biases, weights, learning_rate, num_layers)
+
+        bw_stack.append([biases,weights])
+
+        acc = evaluate(test_data, biases, weights)
+
+        acc_stack.append(acc)
+
+        print("Epoch {0}: {1} / {2}".format(j, acc, n_test))
+        print("Epoch {0} complete".format(j))
+
+    best = acc_stack.index(max(acc_stack))
+
+    print("Best: Epoch {0} with accuracy {1} / {2}".format(best, acc_stack[best], n_test))
+
+    save = open(r'C:\Users\Bryce\Desktop\projects\mnist_data/wb_saves.txt', 'a')
+    save.write("Net {0}, learning rate {1}, accuracy {2}, best weights/biases {3} /".format(net,
+                                                                                learning_rate,
+                                                                                acc_stack[best]/n_test,
+                                                                                bw_stack[best]))
+    save.close()
+
+
+def update_mini_batch(mini_batch, biases, weights, learning_rate, num_layers):
+    # update network's weights and biases by applying gradient descent using backpropagation
+    nabla_b = [np.zeros(b.shape) for b in biases]
+    nabla_w = [np.zeros(w.shape) for w in weights]
+
+
+    features, target = data_featurizer(mini_batch)
+
+    for f in range(len(features)):
+        delta_nabla_b, delta_nabla_w = backprop(features.iloc[f],target.iloc[f], biases, weights, num_layers)
+        nabla_b = [nb+dnb for nb,dnb in zip(nabla_b, delta_nabla_b)]
+        nabla_w = [nw+dnw for nw,dnw in zip(nabla_w, delta_nabla_w)]
+
+    weights = [w-(learning_rate/len(mini_batch))*nw
+               for w,nw in zip(weights, nabla_w)]
+    biases = [b-(learning_rate/len(mini_batch))*nb
+              for b,nb in zip(biases, nabla_b)]
+
+    return biases, weights
+
+def backprop(x,y, biases, weights, num_layers):
+    # reshape x in (784,1)
+    x = x[..., np.newaxis]
+
+    # return a tuple representing the gradient for the cost function
+    nabla_b = [np.zeros(b.shape) for b in biases]
+    nabla_w = [np.zeros(w.shape) for w in weights]  # is this necessary?
+
+    # feedforward
+    activation = x
+    activations = [x] # list to store all activations, layer by layer
+    zs = [] # list to store all z vectors, layer by layer non-sigmoid activations
+    for n in range(num_layers-1):
+        z = np.dot(weights[n], activation) + biases[n]
+        zs.append(z)
+        activation = sigmoid(z)
+        activations.append(activation)
+
+    # shape y data to (10,1) before passing to cost_derivative
+    y = vectorized_result(y)
+
+    # get cost value
+    delta = (activations[-1] - y) * sigmoid_prime(zs[-1])
+
+    nabla_b[-1] = delta
+    nabla_w[-1] = np.dot(delta, activations[-2].transpose())
+
+    # backward pass
+    for n in range(2, num_layers):
+        z = zs[-n]
+        sp = sigmoid_prime(z)
+        delta = np.dot(weights[-n+1].transpose(), delta) * sp
+        nabla_b[-n] = delta
+        nabla_w[-n] = np.dot(delta, activations[-n - 1].transpose())
+
+
+    return (nabla_b, nabla_w)
+
+def cost_derivative(output_activations,y):
+    return(output_activations - y)
+
+
+def evaluate(test_data, biases, weights):
+    test_features, test_target = data_featurizer(test_data)
+
+    test_results = []
+    for n in range(len(test_data)):
+        result = [(feedforward(test_features.iloc[n],biases,weights)),test_target.iloc[n]]
+        test_results.append(result)
+
+    return(sum(int(x==y) for (x,y) in test_results))
+
+
+def feedforward(a, biases, weights):
+    a = a[..., np.newaxis]
+
+    for b,w in zip(biases, weights):
+        a = sigmoid(np.dot(w,a)+b)
+
+    return np.argmax(a)
+
+
+def vectorized_result(j):
+    """take label input and make a (10,1) object with 1.0 as the activation value
+    for the appropriate network node"""
+    e = np.zeros((10,1))
+    e[j] = 1.0
+    return e
+
+
+def data_featurizer(batch):
+    features = batch.iloc[:, 1:]
+    target = batch['label']
+
+    return features, target
+
+
+training_data, validation_data, test_data = load_data()
+net = [784,200,20,20,10]
+num_layers, biases, weights = network(net)
+epochs = 20
+learning_rate = 0.4
+SGD(training_data=training_data, net=net, num_layers=num_layers, biases=biases, weights=weights,
+    epochs=epochs, mini_batch_size=20, learning_rate=learning_rate, test_data=test_data)
+
